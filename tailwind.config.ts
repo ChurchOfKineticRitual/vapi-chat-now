@@ -63,6 +63,21 @@ export default {
 					ring: 'hsl(var(--sidebar-ring))'
 				}
 			},
+			backgroundImage: {
+				'gradient-cyber': 'var(--gradient-cyber)',
+				'gradient-glow': 'var(--gradient-glow)',
+				'gradient-bg': 'var(--gradient-bg)'
+			},
+			boxShadow: {
+				'glow-cyan': 'var(--glow-cyan)',
+				'glow-pink': 'var(--glow-pink)',
+				'glow-subtle': 'var(--glow-subtle)'
+			},
+			animation: {
+				'pulse-glow': 'var(--transition-pulse)',
+				'accordion-down': 'accordion-down 0.2s ease-out',
+				'accordion-up': 'accordion-up 0.2s ease-out'
+			},
 			borderRadius: {
 				lg: 'var(--radius)',
 				md: 'calc(var(--radius) - 2px)',
