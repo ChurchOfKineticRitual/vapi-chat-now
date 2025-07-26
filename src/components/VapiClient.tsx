@@ -106,12 +106,9 @@ const VapiClient = () => {
         <CardContent className="p-8 text-center space-y-6">
           {/* Header */}
           <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-glow-cyan">
-              AI Interview
+            <h1 className="text-3xl font-bold text-primary">
+              Nutrition
             </h1>
-            <p className="text-muted-foreground">
-              Press the button to begin.
-            </p>
           </div>
 
           {/* Start Button */}
@@ -125,7 +122,7 @@ const VapiClient = () => {
                 : 'bg-gradient-cyber hover:glow-cyan border border-primary/30'
             }`}
           >
-            {isCallActive ? 'Call Active' : 'Start Interview'}
+            {isCallActive ? 'Call Active' : 'Begin'}
           </Button>
 
           {/* Status Display */}
