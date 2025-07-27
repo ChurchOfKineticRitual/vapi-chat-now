@@ -1,13 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Mic, MicOff, Phone } from 'lucide-react';
-
-// Vapi types
-declare global {
-  interface Window {
-    Vapi: any;
-  }
-}
+import Vapi from '@vapi-ai/web'; // 1. Import Vapi directly
 
 const VAPI_PUBLIC_KEY = "9a3cbf9c-d1df-476f-984c-ce78100189f9";
 const ASSISTANT_ID = "a9cafb7c-3874-433d-b697-9edeb3445575";
@@ -18,49 +12,34 @@ function App() {
   const [vapi, setVapi] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // 2. Initialize Vapi in a useEffect hook
   useEffect(() => {
-    console.log('Loading Vapi SDK...');
-    // Load Vapi SDK
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/@vapi-ai/web@2.3.8/dist/index.js';
-    script.onload = () => {
-      console.log('Vapi SDK loaded successfully');
-      if (window.Vapi) {
-        const vapiInstance = new window.Vapi(VAPI_PUBLIC_KEY);
-        setVapi(vapiInstance);
+    const vapiInstance = new Vapi(VAPI_PUBLIC_KEY);
+    setVapi(vapiInstance);
 
-        // Set up event listeners
-        vapiInstance.on('call-start', () => {
-          console.log('Call started');
-          setIsConnected(true);
-          setIsLoading(false);
-        });
+    vapiInstance.on('call-start', () => {
+      console.log('Call started');
+      setIsConnected(true);
+      setIsLoading(false);
+    });
 
-        vapiInstance.on('call-end', () => {
-          console.log('Call ended');
-          setIsConnected(false);
-          setIsLoading(false);
-        });
+    vapiInstance.on('call-end', () => {
+      console.log('Call ended');
+      setIsConnected(false);
+      setIsLoading(false);
+    });
 
-        vapiInstance.on('error', (error: any) => {
-          console.error('Vapi error:', error);
-          setError(error.message || 'An error occurred');
-          setIsLoading(false);
-        });
-      }
-    };
-    script.onerror = () => {
-      console.error('Failed to load Vapi SDK');
-      setError('Failed to load Vapi SDK');
-    };
-    document.head.appendChild(script);
+    vapiInstance.on('error', (error: any) => {
+      console.error('Vapi error:', error);
+      setError(error.message || 'An error occurred');
+      setIsLoading(false);
+    });
 
+    // 3. Cleanup function to remove listeners
     return () => {
-      if (document.head.contains(script)) {
-        document.head.removeChild(script);
-      }
+      vapiInstance.removeAllListeners();
     };
-  }, []);
+  }, []); // The empty dependency array ensures this runs only once
 
   const startCall = async () => {
     if (!vapi) {
