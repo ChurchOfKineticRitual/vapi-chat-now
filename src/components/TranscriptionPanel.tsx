@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 interface TranscriptionPanelProps {
   messages: Message[];
   currentTranscript: string;
+  currentAssistantMessage: string;
   isListening: boolean;
   isSpeaking: boolean;
   volumeLevel: number;
@@ -14,6 +15,7 @@ interface TranscriptionPanelProps {
 export function TranscriptionPanel({ 
   messages, 
   currentTranscript, 
+  currentAssistantMessage,
   isListening, 
   isSpeaking,
   volumeLevel 
@@ -24,13 +26,21 @@ export function TranscriptionPanel({
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, currentTranscript]);
+  }, [messages, currentTranscript, currentAssistantMessage]);
 
-  // Create temporary message for current transcript
-  const tempMessage: Message | null = currentTranscript ? {
-    id: 'temp',
+  // Create temporary messages for current transcript and streaming assistant
+  const tempUserMessage: Message | null = currentTranscript ? {
+    id: 'temp-user',
     role: 'user',
     content: currentTranscript,
+    timestamp: new Date(),
+    type: 'transcript'
+  } : null;
+
+  const tempAssistantMessage: Message | null = currentAssistantMessage ? {
+    id: 'temp-assistant',
+    role: 'assistant',
+    content: currentAssistantMessage,
     timestamp: new Date(),
     type: 'transcript'
   } : null;
@@ -70,7 +80,7 @@ export function TranscriptionPanel({
         style={{ backgroundAttachment: 'local' }}
       >
         <div className="relative z-10">
-          {messages.length === 0 && !currentTranscript && (
+          {messages.length === 0 && !currentTranscript && !currentAssistantMessage && (
             <div className="text-center text-muted-foreground py-8">
               <p className="text-sm">Start speaking to see the conversation...</p>
             </div>
@@ -80,8 +90,12 @@ export function TranscriptionPanel({
             <MessageBubble key={message.id} message={message} />
           ))}
           
-          {tempMessage && (
-            <MessageBubble message={tempMessage} isLatest={true} />
+          {tempUserMessage && (
+            <MessageBubble message={tempUserMessage} isLatest={true} />
+          )}
+          
+          {tempAssistantMessage && (
+            <MessageBubble message={tempAssistantMessage} isLatest={true} />
           )}
         </div>
       </div>

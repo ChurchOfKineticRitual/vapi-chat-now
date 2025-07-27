@@ -106,12 +106,35 @@
     animation: typing 1.4s infinite ease-in-out;
   }
   
+  .streaming-assistant {
+    position: relative;
+  }
+  
+  .streaming-assistant::after {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 16px;
+    background-color: hsl(var(--accent));
+    margin-left: 4px;
+    animation: cursor-blink 1s infinite;
+  }
+  
   @keyframes typing {
     0%, 80%, 100% {
       opacity: 0.3;
     }
     40% {
       opacity: 1;
+    }
+  }
+  
+  @keyframes cursor-blink {
+    0%, 50% {
+      opacity: 1;
+    }
+    51%, 100% {
+      opacity: 0;
     }
   }
 }

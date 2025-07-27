@@ -28,7 +28,8 @@ export function MessageBubble({ message, isLatest }: MessageBubbleProps) {
         message.role === 'assistant' && "bg-secondary text-secondary-foreground",
         isSystem && "bg-muted text-muted-foreground text-sm italic",
         message.type === 'transcript' && !isUser && "opacity-70",
-        isLatest && isUser && message.type === 'transcript' && "typing-indicator"
+        isLatest && isUser && message.type === 'transcript' && "typing-indicator",
+        isLatest && !isUser && message.type === 'transcript' && "streaming-assistant"
       )}>
         <p className="text-sm leading-relaxed break-words">
           {message.content}

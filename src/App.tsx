@@ -17,6 +17,7 @@ function App() {
   // New state for transcriptions
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentTranscript, setCurrentTranscript] = useState('');
+  const [currentAssistantMessage, setCurrentAssistantMessage] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [volumeLevel, setVolumeLevel] = useState(0);
@@ -33,6 +34,7 @@ function App() {
       setIsLoading(false);
       setMessages([]);
       setCurrentTranscript('');
+      setCurrentAssistantMessage('');
     });
 
     vapiInstance.on('call-end', () => {
@@ -42,6 +44,7 @@ function App() {
       setIsListening(false);
       setIsSpeaking(false);
       setCurrentTranscript('');
+      setCurrentAssistantMessage('');
     });
 
     // Speech events
@@ -84,16 +87,10 @@ function App() {
         }
       }
       
-      // Handle assistant model output (responses)
+      // Handle assistant model output (responses) - accumulate for live streaming
       else if (message.type === 'model-output') {
-        const newMessage: Message = {
-          id: `model-${Date.now()}-${Math.random()}`,
-          role: 'assistant',
-          content: message.output || message.text || 'Speaking...',
-          timestamp: new Date(),
-          type: 'final'
-        };
-        setMessages(prev => [...prev, newMessage]);
+        const chunk = message.output || message.text || '';
+        setCurrentAssistantMessage(prev => prev + (prev ? ' ' : '') + chunk);
       }
       
       // Handle speech updates for better state management
@@ -112,6 +109,18 @@ function App() {
             setIsListening(false);
           } else if (message.status === 'stopped') {
             setIsSpeaking(false);
+            // Finalize the assistant message when speaking stops
+            if (currentAssistantMessage.trim()) {
+              const newMessage: Message = {
+                id: `assistant-${Date.now()}-${Math.random()}`,
+                role: 'assistant',
+                content: currentAssistantMessage.trim(),
+                timestamp: new Date(),
+                type: 'final'
+              };
+              setMessages(prev => [...prev, newMessage]);
+              setCurrentAssistantMessage('');
+            }
           }
         }
       }
@@ -291,6 +300,7 @@ function App() {
           <TranscriptionPanel
             messages={messages}
             currentTranscript={currentTranscript}
+            currentAssistantMessage={currentAssistantMessage}
             isListening={isListening}
             isSpeaking={isSpeaking}
             volumeLevel={volumeLevel}
