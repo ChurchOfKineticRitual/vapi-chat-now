@@ -1,3 +1,8 @@
-// Minimal file to satisfy TypeScript config
-// The actual app runs from index.html
-console.log("Project uses self-contained index.html");
+import React, { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import App from "./App.tsx";
+import "./index.css";
+
+createRoot(document.getElementById("root")!).render(
+  React.createElement(StrictMode, null, React.createElement(App))
+);
