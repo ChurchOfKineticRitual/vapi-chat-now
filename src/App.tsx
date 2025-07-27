@@ -70,12 +70,13 @@ function App() {
       
       // Handle user voice input (transcripts)
       if (message.type === 'voice-input') {
+        console.log('Voice input message:', message);
         if (message.isFinal) {
           // Add final user transcript to messages
           const newMessage: Message = {
             id: `voice-${Date.now()}-${Math.random()}`,
             role: 'user',
-            content: message.inputText || '',
+            content: message.input || message.inputText || '',
             timestamp: new Date(),
             type: 'final'
           };
@@ -83,14 +84,20 @@ function App() {
           setCurrentTranscript('');
         } else {
           // Update current transcript for real-time display
-          setCurrentTranscript(message.inputText || '');
+          setCurrentTranscript(message.input || message.inputText || '');
         }
       }
       
       // Handle assistant model output (responses) - accumulate for live streaming
       else if (message.type === 'model-output') {
+        console.log('Model output chunk:', message);
         const chunk = message.output || message.text || '';
-        setCurrentAssistantMessage(prev => prev + (prev ? ' ' : '') + chunk);
+        console.log('Adding chunk to currentAssistantMessage:', chunk);
+        setCurrentAssistantMessage(prev => {
+          const newValue = prev + (prev ? ' ' : '') + chunk;
+          console.log('New currentAssistantMessage value:', newValue);
+          return newValue;
+        });
       }
       
       // Handle speech updates for better state management
@@ -107,20 +114,26 @@ function App() {
           if (message.status === 'started') {
             setIsSpeaking(true);
             setIsListening(false);
+            console.log('Assistant started speaking');
           } else if (message.status === 'stopped') {
             setIsSpeaking(false);
+            console.log('Assistant stopped speaking');
             // Finalize the assistant message when speaking stops
-            if (currentAssistantMessage.trim()) {
-              const newMessage: Message = {
-                id: `assistant-${Date.now()}-${Math.random()}`,
-                role: 'assistant',
-                content: currentAssistantMessage.trim(),
-                timestamp: new Date(),
-                type: 'final'
-              };
-              setMessages(prev => [...prev, newMessage]);
-              setCurrentAssistantMessage('');
-            }
+            setCurrentAssistantMessage(current => {
+              console.log('Finalizing assistant message:', current);
+              if (current.trim()) {
+                const newMessage: Message = {
+                  id: `assistant-${Date.now()}-${Math.random()}`,
+                  role: 'assistant',
+                  content: current.trim(),
+                  timestamp: new Date(),
+                  type: 'final'
+                };
+                setMessages(prev => [...prev, newMessage]);
+                return ''; // Clear the current message
+              }
+              return current;
+            });
           }
         }
       }
