@@ -256,12 +256,15 @@
 
         // Initialize Vapi
         function initializeVapi() {
+            console.log('Initializing Vapi...');
             if (!window.Vapi) {
                 console.error('Vapi SDK not loaded');
+                alert('Vapi SDK failed to load. Please check your internet connection.');
                 setStatus('error');
                 return;
             }
 
+            console.log('Creating Vapi instance with key:', VAPI_PUBLIC_KEY);
             vapi = new window.Vapi(VAPI_PUBLIC_KEY);
 
             // Set up event listeners
@@ -299,13 +302,30 @@
 
         // Start call function
         async function startCall() {
-            if (!vapi || isCallActive) return;
+            console.log('Start call button clicked');
+            console.log('Vapi instance:', vapi);
+            console.log('Call active:', isCallActive);
+            
+            if (!vapi) {
+                console.error('Vapi instance not available');
+                alert('Vapi not initialized. Please refresh the page.');
+                setStatus('error');
+                return;
+            }
+            
+            if (isCallActive) {
+                console.log('Call already active, ignoring');
+                return;
+            }
 
             try {
+                console.log('Starting call with assistant ID:', ASSISTANT_ID);
                 setStatus('connecting');
                 await vapi.start(ASSISTANT_ID);
+                console.log('Call started successfully');
             } catch (error) {
                 console.error('Failed to start call:', error);
+                alert('Failed to start call: ' + error.message);
                 setStatus('error');
             }
         }
