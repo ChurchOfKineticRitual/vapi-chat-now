@@ -61,35 +61,35 @@ function App() {
       setVolumeLevel(volume);
     });
 
-    // Enhanced message handling for all Vapi events
+    // Enhanced message handling for actual Vapi message types
     vapiInstance.on('message', (message: any) => {
       console.log('Message received:', message);
       
-      // Handle transcript messages
-      if (message.type === 'transcript') {
-        if (message.transcriptType === 'partial') {
-          // Update current transcript for real-time display
-          setCurrentTranscript(message.transcript || '');
-        } else if (message.transcriptType === 'final') {
+      // Handle user voice input (transcripts)
+      if (message.type === 'voice-input') {
+        if (message.isFinal) {
           // Add final user transcript to messages
           const newMessage: Message = {
             id: Date.now().toString(),
             role: 'user',
-            content: message.transcript || '',
+            content: message.inputText || '',
             timestamp: new Date(),
             type: 'final'
           };
           setMessages(prev => [...prev, newMessage]);
           setCurrentTranscript('');
+        } else {
+          // Update current transcript for real-time display
+          setCurrentTranscript(message.inputText || '');
         }
       }
       
-      // Handle assistant responses
-      else if (message.type === 'assistant-request' || message.type === 'response') {
+      // Handle assistant model output (responses)
+      else if (message.type === 'model-output') {
         const newMessage: Message = {
           id: Date.now().toString(),
           role: 'assistant',
-          content: message.content || message.text || 'Speaking...',
+          content: message.output || message.text || 'Speaking...',
           timestamp: new Date(),
           type: 'final'
         };
@@ -115,6 +115,20 @@ function App() {
         }
       }
       
+      // Handle conversation updates as fallback
+      else if (message.type === 'conversation-update') {
+        if (message.conversation && Array.isArray(message.conversation)) {
+          const convertedMessages: Message[] = message.conversation.map((msg: any, index: number) => ({
+            id: `${Date.now()}-${index}`,
+            role: msg.role === 'user' ? 'user' : 'assistant',
+            content: msg.content || msg.text || '',
+            timestamp: new Date(msg.timestamp || Date.now()),
+            type: 'final'
+          }));
+          setMessages(convertedMessages);
+        }
+      }
+      
       // Handle function calls
       else if (message.type === 'function-call') {
         const newMessage: Message = {
@@ -125,6 +139,23 @@ function App() {
           type: 'function-call'
         };
         setMessages(prev => [...prev, newMessage]);
+      }
+      
+      // Handle legacy transcript messages (fallback)
+      else if (message.type === 'transcript') {
+        if (message.transcriptType === 'partial') {
+          setCurrentTranscript(message.transcript || '');
+        } else if (message.transcriptType === 'final') {
+          const newMessage: Message = {
+            id: Date.now().toString(),
+            role: 'user',
+            content: message.transcript || '',
+            timestamp: new Date(),
+            type: 'final'
+          };
+          setMessages(prev => [...prev, newMessage]);
+          setCurrentTranscript('');
+        }
       }
     });
 
