@@ -19,11 +19,12 @@ function App() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    console.log('Loading Vapi SDK...');
     // Load Vapi SDK
     const script = document.createElement('script');
     script.src = 'https://cdn.jsdelivr.net/npm/@vapi-ai/web@2.3.8/dist/index.js';
     script.onload = () => {
-      console.log('Vapi SDK loaded');
+      console.log('Vapi SDK loaded successfully');
       if (window.Vapi) {
         const vapiInstance = new window.Vapi(VAPI_PUBLIC_KEY);
         setVapi(vapiInstance);
@@ -55,7 +56,9 @@ function App() {
     document.head.appendChild(script);
 
     return () => {
-      document.head.removeChild(script);
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
     };
   }, []);
 
