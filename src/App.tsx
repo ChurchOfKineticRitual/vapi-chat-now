@@ -61,40 +61,70 @@ function App() {
       setVolumeLevel(volume);
     });
 
-    // Messages for transcriptions
+    // Enhanced message handling for all Vapi events
     vapiInstance.on('message', (message: any) => {
       console.log('Message received:', message);
       
+      // Handle transcript messages
       if (message.type === 'transcript') {
         if (message.transcriptType === 'partial') {
           // Update current transcript for real-time display
-          setCurrentTranscript(message.transcript);
+          setCurrentTranscript(message.transcript || '');
         } else if (message.transcriptType === 'final') {
           // Add final user transcript to messages
           const newMessage: Message = {
             id: Date.now().toString(),
             role: 'user',
-            content: message.transcript,
+            content: message.transcript || '',
             timestamp: new Date(),
             type: 'final'
           };
           setMessages(prev => [...prev, newMessage]);
           setCurrentTranscript('');
         }
-      } else if (message.type === 'response') {
-        // Assistant response
-        setIsSpeaking(true);
+      }
+      
+      // Handle assistant responses
+      else if (message.type === 'assistant-request' || message.type === 'response') {
         const newMessage: Message = {
           id: Date.now().toString(),
           role: 'assistant',
-          content: message.content || 'Speaking...',
+          content: message.content || message.text || 'Speaking...',
           timestamp: new Date(),
           type: 'final'
         };
         setMessages(prev => [...prev, newMessage]);
-        
-        // Reset speaking state after a delay
-        setTimeout(() => setIsSpeaking(false), 1000);
+      }
+      
+      // Handle speech updates for better state management
+      else if (message.type === 'speech-update') {
+        if (message.role === 'user') {
+          if (message.status === 'started') {
+            setIsListening(true);
+            setIsSpeaking(false);
+          } else if (message.status === 'stopped') {
+            setIsListening(false);
+          }
+        } else if (message.role === 'assistant') {
+          if (message.status === 'started') {
+            setIsSpeaking(true);
+            setIsListening(false);
+          } else if (message.status === 'stopped') {
+            setIsSpeaking(false);
+          }
+        }
+      }
+      
+      // Handle function calls
+      else if (message.type === 'function-call') {
+        const newMessage: Message = {
+          id: Date.now().toString(),
+          role: 'system',
+          content: `Function called: ${message.functionCall?.name || 'Unknown'}`,
+          timestamp: new Date(),
+          type: 'function-call'
+        };
+        setMessages(prev => [...prev, newMessage]);
       }
     });
 
