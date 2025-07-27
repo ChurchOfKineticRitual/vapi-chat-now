@@ -70,7 +70,7 @@ function App() {
         if (message.isFinal) {
           // Add final user transcript to messages
           const newMessage: Message = {
-            id: Date.now().toString(),
+            id: `voice-${Date.now()}-${Math.random()}`,
             role: 'user',
             content: message.inputText || '',
             timestamp: new Date(),
@@ -87,7 +87,7 @@ function App() {
       // Handle assistant model output (responses)
       else if (message.type === 'model-output') {
         const newMessage: Message = {
-          id: Date.now().toString(),
+          id: `model-${Date.now()}-${Math.random()}`,
           role: 'assistant',
           content: message.output || message.text || 'Speaking...',
           timestamp: new Date(),
@@ -98,6 +98,7 @@ function App() {
       
       // Handle speech updates for better state management
       else if (message.type === 'speech-update') {
+        console.log('Speech update:', message);
         if (message.role === 'user') {
           if (message.status === 'started') {
             setIsListening(true);
@@ -115,24 +116,31 @@ function App() {
         }
       }
       
-      // Handle conversation updates as fallback
+      // Handle conversation updates - this seems to be the main message container
       else if (message.type === 'conversation-update') {
-        if (message.conversation && Array.isArray(message.conversation)) {
-          const convertedMessages: Message[] = message.conversation.map((msg: any, index: number) => ({
-            id: `${Date.now()}-${index}`,
-            role: msg.role === 'user' ? 'user' : 'assistant',
-            content: msg.content || msg.text || '',
+        console.log('Conversation update:', message.conversation, message.messages);
+        
+        // Check if there are messages in the conversation
+        const messagesArray = message.messages || message.conversation || [];
+        if (Array.isArray(messagesArray) && messagesArray.length > 0) {
+          const convertedMessages: Message[] = messagesArray.map((msg: any, index: number) => ({
+            id: `conv-${msg.timestamp || Date.now()}-${index}`,
+            role: (msg.role === 'user' ? 'user' : msg.role === 'assistant' ? 'assistant' : 'system') as 'user' | 'assistant' | 'system',
+            content: msg.content || msg.text || msg.message || '',
             timestamp: new Date(msg.timestamp || Date.now()),
-            type: 'final'
-          }));
-          setMessages(convertedMessages);
+            type: 'final' as const
+          })).filter(msg => msg.content.trim() !== ''); // Filter out empty messages
+          
+          if (convertedMessages.length > 0) {
+            setMessages(convertedMessages);
+          }
         }
       }
       
       // Handle function calls
       else if (message.type === 'function-call') {
         const newMessage: Message = {
-          id: Date.now().toString(),
+          id: `func-${Date.now()}-${Math.random()}`,
           role: 'system',
           content: `Function called: ${message.functionCall?.name || 'Unknown'}`,
           timestamp: new Date(),
@@ -147,7 +155,7 @@ function App() {
           setCurrentTranscript(message.transcript || '');
         } else if (message.transcriptType === 'final') {
           const newMessage: Message = {
-            id: Date.now().toString(),
+            id: `transcript-${Date.now()}-${Math.random()}`,
             role: 'user',
             content: message.transcript || '',
             timestamp: new Date(),
