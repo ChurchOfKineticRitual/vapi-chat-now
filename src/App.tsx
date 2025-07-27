@@ -72,9 +72,7 @@ function App() {
     setError(null);
 
     try {
-      await vapi.start({
-        assistantId: ASSISTANT_ID
-      });
+      await vapi.start(ASSISTANT_ID);
     } catch (error: any) {
       console.error('Failed to start call:', error);
       setError(error.message || 'Failed to start call');
