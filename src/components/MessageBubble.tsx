@@ -1,49 +1,76 @@
-import { cn } from '@/lib/utils';
-
-export interface Message {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: Date;
-  type?: 'transcript' | 'final' | 'function-call';
-}
+import React from 'react';
+import { User, Bot } from 'lucide-react';
 
 interface MessageBubbleProps {
-  message: Message;
-  isLatest?: boolean;
+  role: 'user' | 'assistant';
+  text: string;
+  timestamp: Date;
+  isFinal: boolean;
 }
 
-export function MessageBubble({ message, isLatest }: MessageBubbleProps) {
-  const isUser = message.role === 'user';
-  const isSystem = message.role === 'system';
-  
+const MessageBubble: React.FC<MessageBubbleProps> = ({ 
+  role, 
+  text, 
+  timestamp, 
+  isFinal 
+}) => {
+  const isUser = role === 'user';
+
   return (
-    <div className={cn(
-      "flex w-full mb-3",
-      isUser ? "justify-end" : "justify-start"
-    )}>
-      <div className={cn(
-        "max-w-[80%] px-4 py-2 rounded-2xl transition-all duration-200",
-        isUser && "bg-accent text-accent-foreground ml-auto",
-        message.role === 'assistant' && "bg-secondary text-secondary-foreground",
-        isSystem && "bg-muted text-muted-foreground text-sm italic",
-        message.type === 'transcript' && !isUser && "opacity-70",
-        isLatest && isUser && message.type === 'transcript' && "typing-indicator",
-        isLatest && !isUser && message.type === 'transcript' && "streaming-assistant"
-      )}>
-        <p className="text-sm leading-relaxed break-words">
-          {message.content}
-        </p>
-        <div className={cn(
-          "text-xs mt-1 opacity-60",
-          isUser ? "text-right" : "text-left"
-        )}>
-          {message.timestamp.toLocaleTimeString([], { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-          })}
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
+      <div className={`flex ${isUser ? 'flex-row-reverse' : 'flex-row'} items-start space-x-2 max-w-xs lg:max-w-md`}>
+        {/* Avatar */}
+        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+          isUser 
+            ? 'bg-green-600' 
+            : 'bg-blue-600'
+        }`}>
+          {isUser ? (
+            <User className="w-4 h-4 text-white" />
+          ) : (
+            <Bot className="w-4 h-4 text-white" />
+          )}
+        </div>
+
+        {/* Message Bubble */}
+        <div className={`${isUser ? 'mr-2' : 'ml-2'}`}>
+          <div
+            className={`px-4 py-2 rounded-lg shadow-sm ${
+              isUser
+                ? 'bg-green-600 text-white'
+                : 'bg-gray-700 text-gray-100'
+            } ${
+              !isFinal 
+                ? 'opacity-75 border-2 border-dashed border-gray-500' 
+                : ''
+            }`}
+          >
+            <p className="text-sm leading-relaxed whitespace-pre-wrap">
+              {text}
+            </p>
+            
+            {/* Typing indicator for partial transcripts */}
+            {!isFinal && (
+              <div className="flex items-center mt-1">
+                <div className="flex space-x-1">
+                  <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse"></div>
+                  <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse delay-75"></div>
+                  <div className="w-1 h-1 bg-gray-400 rounded-full animate-pulse delay-150"></div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Timestamp - only show for final messages */}
+          {isFinal && (
+            <p className={`text-xs text-gray-500 mt-1 ${isUser ? 'text-right' : 'text-left'}`}>
+              {timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          )}
         </div>
       </div>
     </div>
   );
-}
+};
+
+export default MessageBubble;
