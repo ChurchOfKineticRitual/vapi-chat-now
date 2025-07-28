@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSpring, useTrail, animated, config } from '@react-spring/web';
 
 // Import Vapi - we know this works
 let Vapi: any = null;
+
+// Simplified app states
+type AppState = 'idle' | 'connecting' | 'conversation' | 'end';
 
 interface Message {
   id: string;
@@ -10,22 +14,96 @@ interface Message {
   isFinal: boolean;
 }
 
+// Cascading Text Component with proper useTrail implementation
+const CascadingText = ({ 
+  text, 
+  isVisible 
+}: { 
+  text: string; 
+  isVisible: boolean;
+}) => {
+  const lines = Array.from({ length: 25 }, (_, i) => ({ text, id: i }));
+  
+  // Use useTrail with API for proper control
+  const [trail, api] = useTrail(
+    lines.length,
+    () => ({
+      opacity: 0,
+      transform: 'translateY(50px)',
+      config: { 
+        mass: 1, 
+        tension: 200, 
+        friction: 50,
+      },
+    }),
+    []
+  );
+
+  // Trigger animation when isVisible changes
+  useEffect(() => {
+    if (isVisible) {
+      api.start((index) => ({
+        opacity: 1,
+        transform: 'translateY(0px)',
+        delay: index * 50, // Staggered cascade effect
+      }));
+    } else {
+      api.start(() => ({
+        opacity: 0,
+        transform: 'translateY(50px)',
+      }));
+    }
+  }, [isVisible, api]);
+
+  const glowSpring = useSpring({
+    loop: { reverse: true },
+    from: { brightness: 0.8 },
+    to: { brightness: 1.2 },
+    config: { duration: 1500 },
+    pause: !isVisible,
+  });
+
+  return (
+    <div className="flex flex-col space-y-1 overflow-hidden h-full items-center">
+      {trail.map((style, index) => (
+        <animated.div
+          key={lines[index].id}
+          className="text-4xl sm:text-6xl md:text-8xl font-bold text-black select-none whitespace-nowrap text-center"
+          style={{
+            ...style,
+            filter: glowSpring.brightness.to(b => `brightness(${b})`),
+          }}
+        >
+          {text}
+        </animated.div>
+      ))}
+    </div>
+  );
+};
+
 function App() {
-  // Core state
+  // Simplified state management
+  const [appState, setAppState] = useState<AppState>('idle');
   const [isConnected, setIsConnected] = useState(false);
-  const [isCallActive, setIsCallActive] = useState(false);
-  const [isStartingCall, setIsStartingCall] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [currentSpeaker, setCurrentSpeaker] = useState<'user' | 'assistant' | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isEnding, setIsEnding] = useState(false);
 
   const vapiRef = useRef<any>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when messages change
+  // Auto-return to idle after "Ciao for Now"
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (appState === 'end') {
+      const timer = setTimeout(() => {
+        setAppState('idle');
+        setMessages([]);
+        setIsEnding(false);
+      }, 1000); // 1 second as requested
+      return () => clearTimeout(timer);
+    }
+  }, [appState]);
 
   useEffect(() => {
     const initVapi = async () => {
@@ -63,18 +141,15 @@ function App() {
     const vapi = vapiRef.current;
 
     vapi.on('call-start', () => {
-      setIsCallActive(true);
-      setIsStartingCall(false);
+      setAppState('conversation');
       setCurrentSpeaker(null);
       setMessages([]);
     });
 
     vapi.on('call-end', () => {
-      setIsCallActive(false);
-      setIsStartingCall(false);
+      setAppState('end');
       setIsSpeaking(false);
       setCurrentSpeaker(null);
-       // Finalize any pending messages
       setMessages(prev => prev.map(msg => ({ ...msg, isFinal: true })));
     });
 
@@ -98,6 +173,7 @@ function App() {
 
     vapi.on('error', (error: any) => {
       console.error('❌ Vapi error:', error);
+      setAppState('idle'); // Return to idle on error
     });
   };
 
@@ -116,10 +192,8 @@ function App() {
     setMessages(prevMessages => {
       const lastMessage = prevMessages[prevMessages.length - 1];
 
-      // Check if the last message is from the same role and is not final
       if (lastMessage && lastMessage.role === role && !lastMessage.isFinal) {
         console.log(`🔄 Continue ${role} message`);
-        // Update the last message
         const updatedMessages = [...prevMessages];
         updatedMessages[updatedMessages.length - 1] = {
           ...lastMessage,
@@ -129,7 +203,6 @@ function App() {
         return updatedMessages;
       } else {
         console.log(`🆕 New ${role} message`);
-        // Create a new message
         const newMessage: Message = {
           id: `${Date.now()}-${Math.random()}`,
           role: role,
@@ -142,196 +215,160 @@ function App() {
   };
 
   const startCall = async () => {
-    if (!vapiRef.current) return;
+    if (!vapiRef.current || !isConnected) return;
 
     const assistantId = import.meta.env.VITE_VAPI_ASSISTANT_ID;
     if (!assistantId) return;
 
     try {
-      setIsStartingCall(true);
+      setAppState('connecting');
       await vapiRef.current.start(assistantId);
     } catch (error) {
       console.error('Failed to start call:', error);
-      setIsStartingCall(false);
+      setAppState('idle');
     }
   };
 
   const endCall = () => {
     if (vapiRef.current) {
-      vapiRef.current.stop();
+      setIsEnding(true);
+      // Add a small delay to show the visual feedback before ending
+      setTimeout(() => {
+        vapiRef.current.stop();
+      }, 300);
+    }
+  };
+
+  const toggleMute = () => {
+    if (!vapiRef.current) return;
+    
+    try {
+      const newMutedState = !isMuted;
+      vapiRef.current.setMuted(newMutedState);
+      setIsMuted(newMutedState);
+      
+      console.log(`Microphone ${newMutedState ? 'muted' : 'unmuted'}`);
+    } catch (error) {
+      console.error('Mute toggle error:', error);
+    }
+  };
+
+  // Render based on app state
+  const renderContent = () => {
+    console.log('Rendering state:', appState);
+    
+    switch (appState) {
+      case 'idle':
+        return (
+          <div className="flex-1 flex items-center justify-center">
+            <button
+              onClick={startCall}
+              disabled={!isConnected}
+              className={`px-12 py-6 rounded-2xl font-bold transition-all duration-300 relative overflow-hidden ${
+                isConnected
+                  ? 'bg-white text-black subtle-pulse'
+                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              <span className="text-4xl">TALK</span>
+            </button>
+          </div>
+        );
+
+      case 'connecting':
+        return (
+          <div className="flex-1 bg-gray-300 p-8 overflow-hidden">
+            <CascadingText text="CONNECTING" isVisible={true} />
+          </div>
+        );
+
+      case 'conversation':
+        return (
+          <div className="flex flex-col h-full">
+            {/* Conversation Container - now takes full height minus button area */}
+            <div className="flex-1 bg-gray-800 rounded-lg border border-gray-700 p-6 overflow-hidden min-h-0 mb-4">
+              <div className="h-full overflow-y-auto">
+                {messages.length === 0 ? (
+                  <div className="text-center text-gray-400 py-8">
+                    <p className="text-2xl font-mono tracking-wider">>>> INCOMING &lt;&lt;&lt;</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {messages.map((message, index) => (
+                      <div key={message.id}>
+                        <div className={`${
+                          message.role === 'user' ? 'text-right' : 'text-left'
+                        } max-w-xs lg:max-w-md ${
+                          message.role === 'user' ? 'ml-auto' : 'mr-auto'
+                        }`}>
+                          <span className={`text-lg leading-relaxed block ${
+                            message.role === 'user' 
+                              ? 'text-teal-400' 
+                              : 'text-green-400'
+                          } ${!message.isFinal ? 'opacity-70' : ''} ${
+                            currentSpeaker === message.role ? 'animate-pulse' : ''
+                          }`}>
+                            {message.text}
+                            {!message.isFinal && (
+                              <span className="inline-block w-2 h-4 bg-white ml-1 animate-pulse"></span>
+                            )}
+                          </span>
+                        </div>
+                        
+                        {/* Add spacing between different speakers */}
+                        {index < messages.length - 1 && 
+                         messages[index + 1].role !== message.role && (
+                          <div className="h-4"></div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Control Buttons - Mobile optimized without hover states */}
+            <div className="flex justify-center space-x-6 flex-shrink-0">
+              <button
+                onClick={endCall}
+                disabled={isEnding}
+                className={`px-8 py-3 rounded-lg font-semibold transition-all duration-200 border-2 active:scale-95 ${
+                  isEnding 
+                    ? 'border-red-400 bg-red-500 text-white animate-pulse' 
+                    : 'border-white bg-transparent text-white active:bg-white active:text-black'
+                }`}
+              >
+                {isEnding ? 'ENDING...' : 'END'}
+              </button>
+              <button
+                onClick={toggleMute}
+                className={`px-8 py-3 rounded-lg font-semibold transition-all duration-200 border-2 active:scale-95 ${
+                  isMuted
+                    ? 'border-white bg-white text-black'
+                    : 'border-white bg-transparent text-white active:bg-white active:text-black'
+                }`}
+              >
+                {isMuted ? 'MUTED' : 'MUTE'}
+              </button>
+            </div>
+          </div>
+        );
+
+      case 'end':
+        return (
+          <div className="flex-1 bg-gray-300 p-8 overflow-hidden">
+            <CascadingText text="CIAO FOR NOW" isVisible={true} />
+          </div>
+        );
+
+      default:
+        return null;
     }
   };
 
   return (
-    <div className="h-screen bg-gray-900 text-white flex flex-col">
-      {/* Keyframes for waveform animation */}
-      <style dangerouslySetInnerHTML={{
-        __html: `
-          @keyframes wave {
-            0% { transform: scaleY(0.5); }
-            100% { transform: scaleY(1.5); }
-          }
-        `
-      }} />
-
-      {/* Header - Fixed Height */}
-      <div className="bg-gray-800 p-4 flex items-center justify-between border-b border-gray-700 flex-shrink-0">
-        <h1 className="text-xl font-bold text-white">NUTRITION</h1>
-        <div className="flex items-center space-x-4">
-          <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-            isConnected
-              ? 'bg-green-900 text-green-200 border border-green-700'
-              : 'bg-red-900 text-red-200 border border-red-700'
-          }`}>
-            {isConnected ? '● Connected' : '○ Disconnected'}
-          </div>
-          {isCallActive && (
-            <div className={`px-3 py-1 rounded-full text-sm font-medium transition-all duration-300 ${
-              isSpeaking
-                ? 'bg-blue-900 text-blue-200 border border-blue-700 animate-pulse'
-                : 'bg-gray-700 text-gray-300 border border-gray-600'
-            }`}>
-              {isSpeaking ? '🎤 Speaking...' : '👂 Listening'}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Main Content - Fixed Layout with CSS Grid */}
-      <div className="flex-1 grid grid-rows-[auto_1fr] gap-4 p-6 min-h-0 overflow-hidden">
-
-        {/* Audio Waveform Display - Fixed Height */}
-        <div className="h-16 bg-gray-800 rounded-lg border border-gray-700 overflow-hidden relative flex-shrink-0">
-          {isCallActive && currentSpeaker && (
-            <div className={`absolute inset-0 flex items-center px-4 ${
-              currentSpeaker === 'user' ? 'justify-end' : 'justify-start'
-            }`}>
-              <div className={`flex items-center space-x-1 transition-all duration-300 ${
-                currentSpeaker === 'user'
-                  ? 'animate-pulse'
-                  : 'animate-pulse'
-              }`}>
-                {/* Waveform bars */}
-                {[...Array(12)].map((_, i) => (
-                  <div
-                    key={i}
-                    className={`w-1 rounded-full transition-all duration-150 ${
-                      currentSpeaker === 'user'
-                        ? 'bg-green-500'
-                        : 'bg-blue-500'
-                    }`}
-                    style={{
-                      height: `${Math.random() * 30 + 10}px`,
-                      animationDelay: `${i * 50}ms`,
-                      animation: 'wave 0.6s ease-in-out infinite alternate'
-                    }}
-                  />
-                ))}
-              </div>
-
-              {/* Speaker label */}
-              <div className={`ml-3 text-xs font-medium ${
-                currentSpeaker === 'user'
-                  ? 'text-green-400'
-                  : 'text-blue-400'
-              }`}>
-                {currentSpeaker === 'user' ? '👤 You' : '🤖 Assistant'}
-              </div>
-            </div>
-          )}
-
-          {/* Idle state */}
-          {(!isCallActive || !currentSpeaker) && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-gray-500 text-sm">
-                {isCallActive ? 'Listening...' : 'Audio levels will appear here during conversation'}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Conversation Panel - Fixed Height with Internal Scrolling */}
-        <div className="bg-gray-800 rounded-lg border border-gray-700 flex flex-col min-h-0 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-700 flex-shrink-0">
-            <h2 className="text-sm font-semibold text-gray-300">
-              Conversation
-            </h2>
-          </div>
-
-          {/* Messages Container - Scrollable */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-            {messages.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">
-                <div className="text-4xl mb-2">💬</div>
-                <p>Start a conversation to see messages appear here.</p>
-                <p className="text-sm">Messages will stream in real-time as you speak.</p>
-              </div>
-            ) : (
-              <>
-                {messages.map((message) => (
-                  <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg shadow-sm transition-all duration-200 ${
-                      message.role === 'user'
-                        ? message.isFinal
-                          ? 'bg-green-600 text-white rounded-br-sm'
-                          : 'bg-green-600/70 text-white rounded-br-sm border-2 border-dashed border-green-400'
-                        : message.isFinal
-                          ? 'bg-blue-600 text-white rounded-bl-sm'
-                          : 'bg-blue-600/70 text-white rounded-bl-sm border-2 border-dashed border-blue-400'
-                    }`}>
-                      <p className="text-sm leading-relaxed">{message.text}</p>
-
-                      {/* Typing cursor for partial messages */}
-                      {!message.isFinal && (
-                        <span className="inline-block w-2 h-4 bg-white ml-1 animate-pulse"></span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {/* Auto-scroll target */}
-                <div ref={messagesEndRef} />
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Control Panel - Fixed Height */}
-      <div className="bg-gray-800 p-6 border-t border-gray-700 flex-shrink-0">
-        <div className="flex items-center justify-center">
-          {!isCallActive ? (
-            <button
-              onClick={startCall}
-              disabled={!isConnected || isStartingCall}
-              className={`px-8 py-4 rounded-lg font-semibold transition-all duration-200 flex items-center space-x-3 ${
-                isConnected && !isStartingCall
-                  ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-600/30 hover:shadow-green-600/50 transform hover:scale-105'
-                  : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              <div className="text-xl">
-                {isStartingCall ? '⏳' : '🎤'}
-              </div>
-              <span>
-                {isStartingCall
-                  ? 'Connecting...'
-                  : isConnected
-                    ? 'Start Voice Call'
-                    : 'Connecting...'
-                }
-              </span>
-            </button>
-          ) : (
-            <button
-              onClick={endCall}
-              className="bg-red-600 hover:bg-red-700 text-white px-8 py-4 rounded-lg font-semibold transition-all duration-200 flex items-center space-x-3 shadow-lg shadow-red-600/30 hover:shadow-red-600/50 transform hover:scale-105"
-            >
-              <div className="text-xl">📞</div>
-              <span>End Call</span>
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white flex flex-col p-6 overflow-hidden">
+      {renderContent()}
     </div>
   );
 }
