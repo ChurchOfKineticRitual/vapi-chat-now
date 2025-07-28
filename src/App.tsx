@@ -290,7 +290,7 @@ function App() {
               <div className="h-full overflow-y-auto">
                 {messages.length === 0 ? (
                   <div className="text-center text-gray-400 py-8">
-                    <p className="text-2xl font-mono tracking-wider">>>> INCOMING &lt;&lt;&lt;</p>
+                    <p className="text-2xl font-mono tracking-wider">{'>>> INCOMING <<<'}</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
