@@ -386,7 +386,7 @@ function App() {
                  style={{ aspectRatio: '4/5' }}>
               <div className="h-full overflow-y-auto">
                 {messages.length === 0 ? (
-                  <div className="text-center text-gray-400 py-8">
+                  <div className="h-full flex items-center justify-center text-gray-400">
                     <p className="text-xl sm:text-2xl font-mono tracking-wider">{'>>> INCOMING <<<'}</p>
                   </div>
                 ) : (
