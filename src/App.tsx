@@ -92,6 +92,17 @@ function App() {
   const [isEnding, setIsEnding] = useState(false);
 
   const vapiRef = useRef<any>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to latest message
+  useEffect(() => {
+    if (messagesEndRef.current && messages.length > 0) {
+      messagesEndRef.current.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'end' 
+      });
+    }
+  }, [messages]);
 
   // Auto-return to idle after "Ciao for Now"
   useEffect(() => {
@@ -165,9 +176,19 @@ function App() {
 
     vapi.on('message', (message: any) => {
       console.log('📩 Message:', message);
-
-      if (message.type === 'transcript') {
+      console.log('📩 Message Type:', message.type);
+      console.log('📩 Message Keys:', Object.keys(message));
+      
+      // Handle different possible transcript message types
+      if (message.type === 'transcript' || 
+          message.type === 'conversation-update' || 
+          message.type === 'status-update' ||
+          message.transcript || 
+          message.transcriptType) {
+        console.log('🎯 Processing as transcript:', message);
         handleTranscript(message);
+      } else {
+        console.log('❌ Not processing message type:', message.type);
       }
     });
 
@@ -178,14 +199,89 @@ function App() {
   };
 
   const handleTranscript = (message: any) => {
-    const { role, transcript, transcriptType } = message;
-    const isFinal = transcriptType === 'final';
+    console.log('🔍 Full message object:', JSON.stringify(message, null, 2));
+    
+    // Try different possible field structures based on various Vapi message formats
+    let role = message.role || message.transcript?.role || message.user || message.assistant;
+    let transcript = message.transcript || message.text || message.transcription || message.content;
+    let transcriptType = message.transcriptType || message.type || message.transcript?.type;
+    
+    // Handle conversation-update format
+    if (message.type === 'conversation-update' && message.conversation) {
+      const lastMessage = message.conversation[message.conversation.length - 1];
+      if (lastMessage) {
+        role = lastMessage.role;
+        transcript = lastMessage.content || lastMessage.text;
+        transcriptType = lastMessage.transcriptType || 'final';
+      }
+    }
+    
+    // Handle status-update format (which might contain transcript data)
+    if (message.type === 'status-update') {
+      // Check if this status update contains transcript information
+      if (Array.isArray(message) && message.length > 0) {
+        // Look through the array for transcript-like data
+        const transcriptData = message.find(item => 
+          item && (item.transcript || item.text || item.content || item.role)
+        );
+        if (transcriptData) {
+          role = transcriptData.role;
+          transcript = transcriptData.transcript || transcriptData.text || transcriptData.content;
+          transcriptType = transcriptData.transcriptType || 'final';
+        }
+      }
+      
+      // Also check if the message itself has nested transcript properties
+      if (message.status && message.status.transcript) {
+        role = message.status.role || role;
+        transcript = message.status.transcript || transcript;
+        transcriptType = message.status.transcriptType || transcriptType;
+      }
+    }
+    
+    // Handle nested transcript objects
+    if (message.transcript && typeof message.transcript === 'object') {
+      role = role || message.transcript.role;
+      transcript = transcript || message.transcript.text || message.transcript.content;
+      transcriptType = transcriptType || message.transcript.transcriptType;
+    }
+    
+    // If we still don't have the essential fields, try to extract from any available field
+    if (!role && (message.user || message.assistant)) {
+      role = message.user ? 'user' : 'assistant';
+    }
+    
+    if (!transcript) {
+      // Look for any field that might contain the actual text
+      const possibleTextFields = ['transcript', 'text', 'content', 'transcription', 'message'];
+      for (const field of possibleTextFields) {
+        if (message[field] && typeof message[field] === 'string') {
+          transcript = message[field];
+          break;
+        }
+      }
+    }
+    
+    // If we still don't have the essential fields, log and return
+    if (!role || !transcript) {
+      console.warn('⚠️ Missing essential transcript fields:', { 
+        role, 
+        transcript, 
+        transcriptType, 
+        messageType: message.type,
+        allKeys: Object.keys(message),
+        fullMessage: message 
+      });
+      return;
+    }
+    
+    const isFinal = transcriptType === 'final' || transcriptType === 'complete' || !transcriptType;
 
     console.log(`🎯 ${role} | ${transcriptType} | "${transcript}"`);
 
-    if (transcriptType === 'partial') {
+    if (transcriptType === 'partial' || transcriptType === 'interim') {
       setCurrentSpeaker(role);
-    } else if (transcriptType === 'final') {
+    } else {
       setCurrentSpeaker(null);
     }
 
@@ -285,54 +381,66 @@ function App() {
       case 'conversation':
         return (
           <div className="flex flex-col h-full">
-            {/* Conversation Container - now takes full height minus button area */}
-            <div className="flex-1 bg-gray-800 rounded-lg border border-gray-700 p-6 overflow-hidden min-h-0 mb-4">
+            {/* Conversation Container - 4:5 aspect ratio with original positioning */}
+            <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 sm:p-6 overflow-hidden mb-4" 
+                 style={{ aspectRatio: '4/5' }}>
               <div className="h-full overflow-y-auto">
                 {messages.length === 0 ? (
                   <div className="text-center text-gray-400 py-8">
-                    <p className="text-2xl font-mono tracking-wider">{'>>> INCOMING <<<'}</p>
+                    <p className="text-xl sm:text-2xl font-mono tracking-wider">{'>>> INCOMING <<<'}</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {messages.map((message, index) => (
-                      <div key={message.id}>
-                        <div className={`${
-                          message.role === 'user' ? 'text-right' : 'text-left'
-                        } max-w-xs lg:max-w-md ${
-                          message.role === 'user' ? 'ml-auto' : 'mr-auto'
-                        }`}>
-                          <span className={`text-lg leading-relaxed block ${
-                            message.role === 'user' 
-                              ? 'text-teal-400' 
-                              : 'text-green-400'
-                          } ${!message.isFinal ? 'opacity-70' : ''} ${
-                            currentSpeaker === message.role ? 'animate-pulse' : ''
+                  <div className="min-h-full flex flex-col justify-center">
+                    {/* Add top padding to center first messages */}
+                    <div className="flex-grow min-h-0" style={{ minHeight: messages.length <= 2 ? '30%' : '0' }}></div>
+                    
+                    <div className="space-y-3">
+                      {messages.map((message, index) => (
+                        <div key={message.id}>
+                          <div className={`${
+                            message.role === 'user' ? 'text-right' : 'text-left'
+                          } max-w-xs lg:max-w-md ${
+                            message.role === 'user' ? 'ml-auto' : 'mr-auto'
                           }`}>
-                            {message.text}
-                            {!message.isFinal && (
-                              <span className="inline-block w-2 h-4 bg-white ml-1 animate-pulse"></span>
-                            )}
-                          </span>
+                            <span className={`text-base sm:text-lg leading-relaxed block ${
+                              message.role === 'user' 
+                                ? 'text-teal-400' 
+                                : 'text-green-400'
+                            } ${!message.isFinal ? 'opacity-70' : ''} ${
+                              currentSpeaker === message.role ? 'animate-pulse' : ''
+                            }`}>
+                              {message.text}
+                              {!message.isFinal && (
+                                <span className="inline-block w-2 h-4 bg-white ml-1 animate-pulse"></span>
+                              )}
+                            </span>
+                          </div>
+                          
+                          {/* Add spacing between different speakers */}
+                          {index < messages.length - 1 && 
+                           messages[index + 1].role !== message.role && (
+                            <div className="h-3 sm:h-4"></div>
+                          )}
                         </div>
-                        
-                        {/* Add spacing between different speakers */}
-                        {index < messages.length - 1 && 
-                         messages[index + 1].role !== message.role && (
-                          <div className="h-4"></div>
-                        )}
-                      </div>
-                    ))}
+                      ))}
+                      
+                      {/* Invisible element for auto-scroll target */}
+                      <div ref={messagesEndRef} />
+                    </div>
+                    
+                    {/* Add bottom padding to ensure last message doesn't get cut off */}
+                    <div className="h-6 sm:h-8"></div>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Control Buttons - Mobile optimized without hover states */}
-            <div className="flex justify-center space-x-6 flex-shrink-0">
+            {/* Control Buttons - Positioned directly below conversation box */}
+            <div className="flex justify-center space-x-4 sm:space-x-6 flex-shrink-0">
               <button
                 onClick={endCall}
                 disabled={isEnding}
-                className={`px-8 py-3 rounded-lg font-semibold transition-all duration-200 border-2 active:scale-95 ${
+                className={`px-6 sm:px-8 py-3 sm:py-4 rounded-lg font-semibold transition-all duration-200 border-2 active:scale-95 text-sm sm:text-base ${
                   isEnding 
                     ? 'border-red-400 bg-red-500 text-white animate-pulse' 
                     : 'border-white bg-transparent text-white active:bg-white active:text-black'
@@ -342,7 +450,7 @@ function App() {
               </button>
               <button
                 onClick={toggleMute}
-                className={`px-8 py-3 rounded-lg font-semibold transition-all duration-200 border-2 active:scale-95 ${
+                className={`px-6 sm:px-8 py-3 sm:py-4 rounded-lg font-semibold transition-all duration-200 border-2 active:scale-95 text-sm sm:text-base ${
                   isMuted
                     ? 'border-white bg-white text-black'
                     : 'border-white bg-transparent text-white active:bg-white active:text-black'
