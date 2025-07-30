@@ -362,7 +362,7 @@ function App() {
               disabled={!isConnected}
               className={`px-12 py-6 rounded-2xl font-bold transition-all duration-300 relative overflow-hidden ${
                 isConnected
-                  ? 'bg-white text-black subtle-pulse'
+                  ? 'bg-white text-black'
                   : 'bg-gray-600 text-gray-400 cursor-not-allowed'
               }`}
             >
